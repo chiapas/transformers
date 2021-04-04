@@ -20,8 +20,10 @@ from ...utils import logging
 
 logger = logging.get_logger(__name__)
 
+import os
 DUMMY_PRETRAINED_CONFIG_ARCHIVE_MAP = {
-    "facebook/dummy-base-960h": "https://huggingface.co/facebook/dummy-base-960h/resolve/main/config.json",
+    # "facebook/dummy-base-960h": "https://huggingface.co/facebook/dummy-base-960h/resolve/main/config.json",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pretrained', 'config.json')
     # See all Dummy models at https://huggingface.co/models?filter=dummy
 }
 

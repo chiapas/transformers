@@ -240,6 +240,14 @@ _import_structure = {
         "Wav2Vec2Processor",
         "Wav2Vec2Tokenizer",
     ],
+    "models.dummy": [
+        "DUMMY_PRETRAINED_CONFIG_ARCHIVE_MAP",
+        "DummyConfig",
+        "DummyCTCTokenizer",
+        "DummyFeatureExtractor",
+        "DummyProcessor",
+        "DummyTokenizer",
+    ],
     "models.xlm": ["XLM_PRETRAINED_CONFIG_ARCHIVE_MAP", "XLMConfig", "XLMTokenizer"],
     "models.xlm_prophetnet": ["XLM_PROPHETNET_PRETRAINED_CONFIG_ARCHIVE_MAP", "XLMProphetNetConfig"],
     "models.xlm_roberta": ["XLM_ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP", "XLMRobertaConfig"],
@@ -994,6 +1002,15 @@ if is_torch_available():
             "Wav2Vec2PreTrainedModel",
         ]
     )
+    _import_structure["models.dummy"].extend(
+        [
+            "DUMMY_PRETRAINED_MODEL_ARCHIVE_LIST",
+            "DummyForCTC",
+            "DummyForMaskedLM",
+            "DummyModel",
+            "DummyPreTrainedModel",
+        ]
+    )
     _import_structure["models.xlm"].extend(
         [
             "XLM_PRETRAINED_MODEL_ARCHIVE_LIST",
@@ -1657,6 +1674,14 @@ if TYPE_CHECKING:
         Wav2Vec2Processor,
         Wav2Vec2Tokenizer,
     )
+    from .models.dummy import (
+        DUMMY_PRETRAINED_CONFIG_ARCHIVE_MAP,
+        DummyConfig,
+        DummyCTCTokenizer,
+        DummyFeatureExtractor,
+        DummyProcessor,
+        DummyTokenizer,
+    )
     from .models.xlm import XLM_PRETRAINED_CONFIG_ARCHIVE_MAP, XLMConfig, XLMTokenizer
     from .models.xlm_prophetnet import XLM_PROPHETNET_PRETRAINED_CONFIG_ARCHIVE_MAP, XLMProphetNetConfig
     from .models.xlm_roberta import XLM_ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP, XLMRobertaConfig
@@ -2281,6 +2306,13 @@ if TYPE_CHECKING:
             Wav2Vec2ForMaskedLM,
             Wav2Vec2Model,
             Wav2Vec2PreTrainedModel,
+        )
+        from .models.dummy import (
+            DUMMY_PRETRAINED_MODEL_ARCHIVE_LIST,
+            DummyForCTC,
+            DummyForMaskedLM,
+            DummyModel,
+            DummyPreTrainedModel,
         )
         from .models.xlm import (
             XLM_PRETRAINED_MODEL_ARCHIVE_LIST,

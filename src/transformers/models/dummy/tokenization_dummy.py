@@ -36,13 +36,15 @@ VOCAB_FILES_NAMES = {
     "vocab_file": "vocab.json",
     "tokenizer_config_file": "tokenizer_config.json",
 }
-
+import os
 PRETRAINED_VOCAB_FILES_MAP = {
     "vocab_file": {
-        "facebook/dummy-base-960h": "https://huggingface.co/facebook/dummy-base-960h/resolve/main/vocab.json",
+        #"facebook/dummy-base-960h": "https://huggingface.co/facebook/dummy-base-960h/resolve/main/vocab.json",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pretrained', 'vocab.json')
     },
     "tokenizer_config_file": {
-        "facebook/dummy-base-960h": "https://huggingface.co/facebook/dummy-base-960h/resolve/main/tokenizer_config.json",
+        #"facebook/dummy-base-960h": "https://huggingface.co/facebook/dummy-base-960h/resolve/main/tokenizer_config.json",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pretrained', 'tokenizer_config.json')
     },
 }
 

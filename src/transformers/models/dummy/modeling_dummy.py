@@ -35,11 +35,13 @@ logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "DummyConfig"
 
+import os
 DUMMY_PRETRAINED_MODEL_ARCHIVE_LIST = [
-    "facebook/dummy-base-960h",
-    "facebook/dummy-large-960h",
-    "facebook/dummy-large-960h-lv60",
-    "facebook/dummy-large-960h-lv60-self",
+    #"facebook/dummy-base-960h",
+    #"facebook/dummy-large-960h",
+    #"facebook/dummy-large-960h-lv60",
+    #"facebook/dummy-large-960h-lv60-self",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pretrained')
     # See all Dummy models at https://huggingface.co/models?filter=dummy
 ]
 
