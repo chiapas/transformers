@@ -244,8 +244,6 @@ _import_structure = {
         "DUMMY_PRETRAINED_CONFIG_ARCHIVE_MAP",
         "DummyConfig",
         "DummyCTCTokenizer",
-        "DummyFeatureExtractor",
-        "DummyProcessor",
         "DummyTokenizer",
     ],
     "models.xlm": ["XLM_PRETRAINED_CONFIG_ARCHIVE_MAP", "XLMConfig", "XLMTokenizer"],
@@ -1678,8 +1676,6 @@ if TYPE_CHECKING:
         DUMMY_PRETRAINED_CONFIG_ARCHIVE_MAP,
         DummyConfig,
         DummyCTCTokenizer,
-        DummyFeatureExtractor,
-        DummyProcessor,
         DummyTokenizer,
     )
     from .models.xlm import XLM_PRETRAINED_CONFIG_ARCHIVE_MAP, XLMConfig, XLMTokenizer

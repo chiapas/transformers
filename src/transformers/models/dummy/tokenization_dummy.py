@@ -356,7 +356,7 @@ class DummyTokenizer(PreTrainedTokenizer):
         )
 
         warnings.warn(
-            "The class `DummyTokenizer` is deprecated and will be removed in version 5 of Transformers. Please use `DummyProcessor` or `DummyCTCTokenizer` instead.",
+            "The class `DummyTokenizer` is deprecated and will be removed in version 5 of Transformers. Please use `DummyCTCTokenizer` instead.",
             FutureWarning,
         )
 

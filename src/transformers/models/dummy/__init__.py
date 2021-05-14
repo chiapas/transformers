@@ -22,8 +22,6 @@ from ...file_utils import _BaseLazyModule, is_tokenizers_available, is_torch_ava
 
 _import_structure = {
     "configuration_dummy": ["DUMMY_PRETRAINED_CONFIG_ARCHIVE_MAP", "DummyConfig"],
-    "feature_extraction_dummy": ["DummyFeatureExtractor"],
-    "processing_dummy": ["DummyProcessor"],
     "tokenization_dummy": ["DummyCTCTokenizer", "DummyTokenizer"],
 }
 
@@ -31,7 +29,6 @@ if is_torch_available():
     _import_structure["modeling_dummy"] = [
         "DUMMY_PRETRAINED_MODEL_ARCHIVE_LIST",
         "DummyForCTC",
-        "DummyForMaskedLM",
         "DummyModel",
         "DummyPreTrainedModel",
     ]
@@ -39,15 +36,12 @@ if is_torch_available():
 
 if TYPE_CHECKING:
     from .configuration_dummy import DUMMY_PRETRAINED_CONFIG_ARCHIVE_MAP, DummyConfig
-    from .feature_extraction_dummy import DummyFeatureExtractor
-    from .processing_dummy import DummyProcessor
     from .tokenization_dummy import DummyCTCTokenizer, DummyTokenizer
 
     if is_torch_available():
         from .modeling_dummy import (
             DUMMY_PRETRAINED_MODEL_ARCHIVE_LIST,
             DummyForCTC,
-            DummyForMaskedLM,
             DummyModel,
             DummyPreTrainedModel,
         )
