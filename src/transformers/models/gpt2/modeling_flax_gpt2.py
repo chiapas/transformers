@@ -321,7 +321,6 @@ class FlaxGPT2Block(nn.Module):
         hidden_states = attn_output + residual
 
         # Cross-Attention Block
-        cross_attn_weights = None
         if encoder_hidden_states is not None:
 
             residual = hidden_states
@@ -404,6 +403,8 @@ class FlaxGPT2PreTrainedModel(FlaxPreTrainedModel):
         input_ids,
         attention_mask=None,
         position_ids=None,
+        encoder_hidden_states: Optional[jnp.ndarray] = None,
+        encoder_attention_mask: Optional[jnp.ndarray] = None,
         params: dict = None,
         past_key_values: dict = None,
         dropout_rng: jax.random.PRNGKey = None,
@@ -417,6 +418,10 @@ class FlaxGPT2PreTrainedModel(FlaxPreTrainedModel):
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         return_dict = return_dict if return_dict is not None else self.config.return_dict
+
+        if encoder_hidden_states is not None and encoder_attention_mask is None:
+            batch_size, sequence_length = encoder_hidden_states.shape[:2]
+            encoder_attention_mask = jnp.ones((batch_size, sequence_length))
 
         batch_size, sequence_length = input_ids.shape
 
@@ -448,6 +453,8 @@ class FlaxGPT2PreTrainedModel(FlaxPreTrainedModel):
             jnp.array(input_ids, dtype="i4"),
             jnp.array(attention_mask, dtype="i4"),
             jnp.array(position_ids, dtype="i4"),
+            encoder_hidden_states,
+            jnp.array(encoder_attention_mask, dtype="i4"),
             not train,
             False,
             output_attentions,
@@ -625,6 +632,8 @@ class FlaxGPT2LMHeadModule(nn.Module):
         input_ids,
         attention_mask,
         position_ids,
+        encoder_hidden_states: Optional[jnp.ndarray] = None,
+        encoder_attention_mask: Optional[jnp.ndarray] = None,
         deterministic: bool = True,
         init_cache: bool = False,
         output_attentions: bool = False,
@@ -635,6 +644,8 @@ class FlaxGPT2LMHeadModule(nn.Module):
             input_ids,
             attention_mask,
             position_ids,
+            encoder_hidden_states,
+            encoder_attention_mask,
             deterministic=deterministic,
             init_cache=init_cache,
             output_attentions=output_attentions,
