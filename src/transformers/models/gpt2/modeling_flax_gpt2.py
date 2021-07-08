@@ -117,6 +117,7 @@ class FlaxConv1D(nn.Module):
 class FlaxGPT2Attention(nn.Module):
     config: GPT2Config
     dtype: jnp.dtype = jnp.float32
+    causal: bool = True
 
     def setup(self):
         config = self.config
@@ -126,8 +127,13 @@ class FlaxGPT2Attention(nn.Module):
 
         self.c_attn = FlaxConv1D(features=3 * self.embed_dim, dtype=self.dtype)
         self.c_proj = FlaxConv1D(self.embed_dim, dtype=self.dtype)
+
+        self.c_attn_for_k_v = FlaxConv1D(features=2 * self.embed_dim, dtype=self.dtype)
+
         self.resid_dropout = nn.Dropout(rate=config.resid_pdrop)
-        self.causal_mask = make_causal_mask(jnp.ones((1, config.max_position_embeddings), dtype="bool"), dtype="bool")
+
+        if self.causal:
+            self.causal_mask = make_causal_mask(jnp.ones((1, config.max_position_embeddings), dtype="bool"), dtype="bool")
 
     def _split_heads(self, hidden_states):
         return hidden_states.reshape(hidden_states.shape[:2] + (self.num_heads, self.head_dim))
@@ -170,13 +176,23 @@ class FlaxGPT2Attention(nn.Module):
     def __call__(
         self,
         hidden_states,
+        key_value_states: Optional[jnp.ndarray] = None,
         attention_mask=None,
         deterministic: bool = True,
         init_cache: bool = False,
         output_attentions: bool = False,
     ):
+
+        # if key_value_states are provided this layer is used as a cross-attention layer
+        # for the decoder
+        is_cross_attention = key_value_states is not None
+
         qkv_out = self.c_attn(hidden_states)
         query, key, value = jnp.split(qkv_out, 3, axis=2)
+
+        if is_cross_attention:
+            _qkv_out = self.c_attn_for_k_v(key_value_states)
+            _, key, value = jnp.split(_qkv_out, 2, axis=2)
 
         query = self._split_heads(query)
         key = self._split_heads(key)
@@ -184,20 +200,27 @@ class FlaxGPT2Attention(nn.Module):
 
         query_length, key_length = query.shape[1], key.shape[1]
 
-        if self.has_variable("cache", "cached_key"):
-            mask_shift = self.variables["cache"]["cache_index"]
-            max_decoder_length = self.variables["cache"]["cached_key"].shape[1]
-            causal_mask = lax.dynamic_slice(
-                self.causal_mask, (0, 0, mask_shift, 0), (1, 1, query_length, max_decoder_length)
-            )
-        else:
-            causal_mask = self.causal_mask[:, :, :query_length, :key_length]
+        if self.causal:
+            if self.has_variable("cache", "cached_key"):
+                mask_shift = self.variables["cache"]["cache_index"]
+                max_decoder_length = self.variables["cache"]["cached_key"].shape[1]
+                causal_mask = lax.dynamic_slice(
+                    self.causal_mask, (0, 0, mask_shift, 0), (1, 1, query_length, max_decoder_length)
+                )
+            else:
+                causal_mask = self.causal_mask[:, :, :query_length, :key_length]
 
-        batch_size = hidden_states.shape[0]
-        causal_mask = jnp.broadcast_to(causal_mask, (batch_size,) + causal_mask.shape[1:])
+            batch_size = hidden_states.shape[0]
+            causal_mask = jnp.broadcast_to(causal_mask, (batch_size,) + causal_mask.shape[1:])
 
-        attention_mask = jnp.broadcast_to(jnp.expand_dims(attention_mask, axis=(-3, -2)), causal_mask.shape)
-        attention_mask = combine_masks(attention_mask, causal_mask)
+        # combine masks if needed
+        if attention_mask is not None and self.causal:
+            attention_mask = jnp.broadcast_to(jnp.expand_dims(attention_mask, axis=(-3, -2)), causal_mask.shape)
+            attention_mask = combine_masks(attention_mask, causal_mask)
+        elif self.causal:
+            attention_mask = causal_mask
+        elif attention_mask is not None:
+            attention_mask = jnp.expand_dims(attention_mask, axis=(-3, -2))
 
         dropout_rng = None
         if not deterministic and self.config.attn_pdrop > 0.0:
@@ -205,15 +228,18 @@ class FlaxGPT2Attention(nn.Module):
 
         # During fast autoregressive decoding, we feed one position at a time,
         # and cache the keys and values step by step.
-        if self.has_variable("cache", "cached_key") or init_cache:
+        if self.causal and (self.has_variable("cache", "cached_key") or init_cache):
             key, value, attention_mask = self._concatenate_to_cache(key, value, query, attention_mask)
 
         # transform boolean mask into float mask
-        attention_bias = lax.select(
-            attention_mask > 0,
-            jnp.full(attention_mask.shape, 0.0).astype(self.dtype),
-            jnp.full(attention_mask.shape, -1e4).astype(self.dtype),
-        )
+        if attention_mask is not None:
+            attention_bias = lax.select(
+                attention_mask > 0,
+                jnp.full(attention_mask.shape, 0.0).astype(self.dtype),
+                jnp.full(attention_mask.shape, -1e4).astype(self.dtype),
+            )
+        else:
+            attention_bias = None
 
         # usual dot product attention
         attn_weights = dot_product_attention_weights(
@@ -266,6 +292,8 @@ class FlaxGPT2Block(nn.Module):
 
         self.ln_1 = nn.LayerNorm(epsilon=self.config.layer_norm_epsilon, dtype=self.dtype)
         self.attn = FlaxGPT2Attention(self.config, dtype=self.dtype)
+        self.ln_3 = nn.LayerNorm(epsilon=self.config.layer_norm_epsilon, dtype=self.dtype)
+        self.encoder_attn = FlaxGPT2Attention(config=self.config, dtype=self.dtype)
         self.ln_2 = nn.LayerNorm(epsilon=self.config.layer_norm_epsilon, dtype=self.dtype)
         self.mlp = FlaxGPT2MLP(self.config, inner_dim, dtype=self.dtype)
 
@@ -273,6 +301,8 @@ class FlaxGPT2Block(nn.Module):
         self,
         hidden_states,
         attention_mask=None,
+        encoder_hidden_states: Optional[jnp.ndarray] = None,
+        encoder_attention_mask: Optional[jnp.ndarray] = None,
         deterministic: bool = True,
         init_cache: bool = False,
         output_attentions: bool = False,
@@ -289,6 +319,25 @@ class FlaxGPT2Block(nn.Module):
         # residual connection
         attn_output = outputs[0]
         hidden_states = attn_output + residual
+
+        # Cross-Attention Block
+        cross_attn_weights = None
+        if encoder_hidden_states is not None:
+
+            residual = hidden_states
+            hidden_states = self.ln_3(hidden_states)
+
+            cross_attn_outputs = self.encoder_attn(
+                hidden_states=hidden_states,
+                key_value_states=encoder_hidden_states,
+                attention_mask=encoder_attention_mask,
+                deterministic=deterministic,
+                output_attentions=output_attentions,
+            )
+
+            # residual connection
+            cross_attn_output = cross_attn_outputs[0]
+            hidden_states = cross_attn_output + residual
 
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
@@ -433,6 +482,8 @@ class FlaxGPT2BlockCollection(nn.Module):
         self,
         hidden_states,
         attention_mask=None,
+        encoder_hidden_states: Optional[jnp.ndarray] = None,
+        encoder_attention_mask: Optional[jnp.ndarray] = None,
         deterministic: bool = True,
         init_cache: bool = False,
         output_attentions: bool = False,
@@ -449,6 +500,8 @@ class FlaxGPT2BlockCollection(nn.Module):
             layer_outputs = block(
                 hidden_states,
                 attention_mask,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
                 deterministic=deterministic,
                 init_cache=init_cache,
                 output_attentions=output_attentions,
@@ -502,6 +555,8 @@ class FlaxGPT2Module(nn.Module):
         input_ids,
         attention_mask,
         position_ids,
+        encoder_hidden_states: Optional[jnp.ndarray] = None,
+        encoder_attention_mask: Optional[jnp.ndarray] = None,
         deterministic=True,
         init_cache: bool = False,
         output_attentions: bool = False,
@@ -517,6 +572,8 @@ class FlaxGPT2Module(nn.Module):
         outputs = self.h(
             hidden_states,
             attention_mask,
+            encoder_hidden_states,
+            encoder_attention_mask,
             deterministic=deterministic,
             init_cache=init_cache,
             output_attentions=output_attentions,
