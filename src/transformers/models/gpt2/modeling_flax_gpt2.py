@@ -192,7 +192,7 @@ class FlaxGPT2Attention(nn.Module):
 
         if is_cross_attention:
             _qkv_out = self.c_attn_for_k_v(key_value_states)
-            _, key, value = jnp.split(_qkv_out, 2, axis=2)
+            key, value = jnp.split(_qkv_out, 2, axis=2)
 
         query = self._split_heads(query)
         key = self._split_heads(key)
@@ -376,7 +376,13 @@ class FlaxGPT2PreTrainedModel(FlaxPreTrainedModel):
         params_rng, dropout_rng = jax.random.split(rng)
         rngs = {"params": params_rng, "dropout": dropout_rng}
 
-        return self.module.init(rngs, input_ids, attention_mask, position_ids, return_dict=False)["params"]
+        encoder_hidden_states = jnp.zeros(input_shape + (self.config.n_embd,))
+        encoder_attention_mask = attention_mask
+        return self.module.init(rngs, input_ids, attention_mask, position_ids, encoder_hidden_states, encoder_attention_mask, return_dict=False)["params"]
+
+    @classmethod
+    def _from_config(cls, config, **kwargs):
+        return super()._from_config(config, **kwargs)
 
     def init_cache(self, batch_size, max_length):
         r"""
@@ -454,7 +460,7 @@ class FlaxGPT2PreTrainedModel(FlaxPreTrainedModel):
             jnp.array(attention_mask, dtype="i4"),
             jnp.array(position_ids, dtype="i4"),
             encoder_hidden_states,
-            jnp.array(encoder_attention_mask, dtype="i4"),
+            encoder_attention_mask,
             not train,
             False,
             output_attentions,
