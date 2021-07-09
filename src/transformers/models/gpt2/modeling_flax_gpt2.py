@@ -376,9 +376,14 @@ class FlaxGPT2PreTrainedModel(FlaxPreTrainedModel):
         params_rng, dropout_rng = jax.random.split(rng)
         rngs = {"params": params_rng, "dropout": dropout_rng}
 
-        encoder_hidden_states = jnp.zeros(input_shape + (self.config.n_embd,))
-        encoder_attention_mask = attention_mask
-        return self.module.init(rngs, input_ids, attention_mask, position_ids, encoder_hidden_states, encoder_attention_mask, return_dict=False)["params"]
+        if self.config.add_cross_attention:
+            encoder_hidden_states = jnp.zeros(input_shape + (self.config.n_embd,))
+            encoder_attention_mask = attention_mask
+            module_init_outputs = self.module.init(rngs, input_ids, attention_mask, position_ids, encoder_hidden_states, encoder_attention_mask, return_dict=False)
+        else:
+            module_init_outputs = self.module.init(rngs, input_ids, attention_mask, position_ids, return_dict=False)
+
+        return module_init_outputs["params"]
 
     @classmethod
     def _from_config(cls, config, **kwargs):
