@@ -556,7 +556,7 @@ class FlaxGPT2BlockCollection(nn.Module):
                 last_hidden_state=hidden_states,
                 past_key_values=None,
                 hidden_states=all_hidden_states,
-                attentions=all_self_attns,
+                attentions=all_attentions,
                 cross_attentions=all_cross_attentions,
             )
 
