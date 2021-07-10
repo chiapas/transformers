@@ -344,7 +344,11 @@ class FlaxGPT2Block(nn.Module):
         # residual connection
         hidden_states = residual + feed_forward_hidden_states
 
-        return (hidden_states,) + outputs[1:]
+        output = (hidden_states,) + outputs[1:]
+        if encoder_hidden_states is not None:
+            output = output + cross_attn_outputs[1:]
+
+        return output
 
 
 class FlaxGPT2PreTrainedModel(FlaxPreTrainedModel):
@@ -510,6 +514,7 @@ class FlaxGPT2BlockCollection(nn.Module):
     ):
         all_attentions = () if output_attentions else None
         all_hidden_states = () if output_hidden_states else None
+        all_cross_attentions = () if (output_attentions and encoder_hidden_states is not None) else None
 
         for block in self.blocks:
             if output_hidden_states:
@@ -528,22 +533,32 @@ class FlaxGPT2BlockCollection(nn.Module):
 
             if output_attentions:
                 all_attentions += (layer_outputs[1],)
+                if encoder_hidden_states is not None:
+                    all_cross_attentions += (layer_outputs[2],)
 
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
 
-        outputs = (hidden_states,)
+        outputs = [hidden_states, all_hidden_states, all_self_attns, all_cross_attentions]
 
         if not return_dict:
             return tuple(v for v in outputs if v is not None)
 
-        return FlaxBaseModelOutputWithPast(
-            last_hidden_state=hidden_states,
-            past_key_values=None,
-            hidden_states=all_hidden_states,
-            attentions=all_attentions,
-        )
-
+        if encoder_hidden_states is None:
+            return FlaxBaseModelOutputWithPast(
+                last_hidden_state=hidden_states,
+                past_key_values=None,
+                hidden_states=all_hidden_states,
+                attentions=all_attentions,
+            )
+        else:
+            return FlaxBaseModelOutputWithPastAndCrossAttentions(
+                last_hidden_state=hidden_states,
+                past_key_values=None,
+                hidden_states=all_hidden_states,
+                attentions=all_self_attns,
+                cross_attentions=all_cross_attentions,
+            )
 
 class FlaxGPT2Module(nn.Module):
     config: GPT2Config
@@ -605,12 +620,19 @@ class FlaxGPT2Module(nn.Module):
         if not return_dict:
             return (hidden_states,) + outputs[1:]
 
-        return FlaxBaseModelOutput(
-            last_hidden_state=hidden_states,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
-        )
-
+        if encoder_hidden_states is None:
+            return FlaxBaseModelOutput(
+                last_hidden_state=hidden_states,
+                hidden_states=outputs.hidden_states,
+                attentions=outputs.attentions,
+            )
+        else:
+            return FlaxBaseModelOutputWithPastAndCrossAttentions(
+                last_hidden_state=hidden_states,
+                hidden_states=outputs.hidden_states,
+                attentions=outputs.attentions,
+                cross_attentions=outputs.cross_attentions,
+            )
 
 @add_start_docstrings(
     "The bare GPT2 Model transformer outputting raw hidden-states without any specific head on top.",
@@ -675,8 +697,18 @@ class FlaxGPT2LMHeadModule(nn.Module):
         if not return_dict:
             return (lm_logits,) + outputs[1:]
 
-        return FlaxCausalLMOutput(logits=lm_logits, hidden_states=outputs.hidden_states, attentions=outputs.attentions)
-
+        if encoder_hidden_states is None:
+            return FlaxCausalLMOutput(logits=lm_logits, hidden_states=outputs.hidden_states, attentions=outputs.attentions)
+        else:
+            return FlaxSeq2SeqLMOutput(
+                logits=lm_logits,
+                decoder_hidden_states=outputs.hidden_states,
+                decoder_attentions=outputs.attentions,
+                cross_attentions=outputs.cross_attentions,
+                encoder_last_hidden_state=encoder_last_hidden_state,
+                encoder_hidden_states=None,
+                encoder_attentions=None,
+            )
 
 @add_start_docstrings(
     """
