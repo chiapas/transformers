@@ -705,7 +705,7 @@ class FlaxGPT2LMHeadModule(nn.Module):
                 decoder_hidden_states=outputs.hidden_states,
                 decoder_attentions=outputs.attentions,
                 cross_attentions=outputs.cross_attentions,
-                encoder_last_hidden_state=encoder_last_hidden_state,
+                encoder_last_hidden_state=encoder_hidden_states,
                 encoder_hidden_states=None,
                 encoder_attentions=None,
             )
