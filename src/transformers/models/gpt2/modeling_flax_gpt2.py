@@ -539,7 +539,7 @@ class FlaxGPT2BlockCollection(nn.Module):
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
 
-        outputs = [hidden_states, all_hidden_states, all_self_attns, all_cross_attentions]
+        outputs = [hidden_states, all_hidden_states, all_attentions, all_cross_attentions]
 
         if not return_dict:
             return tuple(v for v in outputs if v is not None)
