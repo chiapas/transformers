@@ -507,6 +507,8 @@ def load_tf_weights(model, resolved_archive_file, ignore_mismatched_sizes=False,
                 symbolic_weights = layer.trainable_weights + layer.non_trainable_weights
                 saved_weights = {}
 
+                name_map = {}
+
                 # Create a dict from the H5 saved model that looks like {"weight_name": weight_value}
                 # And a set with only the names
                 for weight_name in hdf5_format.load_attributes_from_hdf5_group(h5_layer_object, "weight_names"):
@@ -521,14 +523,15 @@ def load_tf_weights(model, resolved_archive_file, ignore_mismatched_sizes=False,
 
                     # Add the updated name to the final list for computing missing/unexpected values
                     saved_weight_names_set.add(name)
+                    name_map[weight_name] = name
 
                 # Loop over each weights from the instantiated model and compare with the weights from the H5 file
                 for symbolic_weight in symbolic_weights:
                     # TF names always start with the model name so we ignore it
                     if _prefix is not None:
 
-                        if symbolic_weight.name in saved_weight_names_set:
-                            symbolic_weight_name = symbolic_weight.name
+                        if symbolic_weight.name in name_map:
+                            symbolic_weight_name = name_map[symbolic_weight.name]
                         else:
                             delimeter = len(_prefix.split("/"))
                             symbolic_weight_name = "/".join(
