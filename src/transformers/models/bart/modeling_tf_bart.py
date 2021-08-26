@@ -1661,11 +1661,6 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
                     inputs["labels"], self.config.pad_token_id, self.config.decoder_start_token_id
                 )
 
-        # batch_size, seq_len = inputs["input_ids"].shape
-        # shape = (batch_size, seq_len) + (self.config.hidden_size,)
-        # h = tf.random.uniform(shape=shape)
-        # inputs["encoder_hidden_states"] = h
-
         outputs = self.model(
             inputs["input_ids"],
             inputs_embeds=inputs["inputs_embeds"],
