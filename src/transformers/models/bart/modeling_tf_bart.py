@@ -1600,10 +1600,6 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
         Returns:
 
         """
-
-        print('hihi')
-        print(**kwargs)
-
         inputs = input_processing(
             func=self.call,
             config=self.config,
