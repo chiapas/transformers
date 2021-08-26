@@ -661,7 +661,7 @@ class TFBartEncoderDecoderModelTest(TFEncoderDecoderMixin, unittest.TestCase):
 
     def prepare_config_and_inputs(self):
         model_tester_encoder = TFBertModelTester(self, batch_size=13)
-        model_tester_decoder = BartStandaloneDecoderModelTester(self)
+        model_tester_decoder = TFBartStandaloneDecoderModelTester(self)
         encoder_config_and_inputs = model_tester_encoder.prepare_config_and_inputs()
         decoder_config_and_inputs = model_tester_decoder.prepare_config_and_inputs_for_decoder()
         (
