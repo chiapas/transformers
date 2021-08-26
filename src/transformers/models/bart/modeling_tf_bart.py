@@ -1680,10 +1680,9 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
         loss = None
 
         if inputs["labels"] is not None:
-            # No shift in PyTorch?
-            # # shift labels to the left and cut last logit token
-            # lm_logits = lm_logits[:, :-1]
-            # labels = inputs["labels"][:, 1:]
+            # shift labels to the left and cut last logit token
+            lm_logits = lm_logits[:, :-1]
+            labels = inputs["labels"][:, 1:]
             loss = self.compute_loss(labels=labels, logits=lm_logits)
 
         if not inputs["return_dict"]:

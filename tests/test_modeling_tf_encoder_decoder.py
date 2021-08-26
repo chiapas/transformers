@@ -277,6 +277,7 @@ class TFEncoderDecoderMixin:
         assert "loss" in outputs_encoder_decoder
 
         # Unlike in Pytorch's `GPT2LMHeadModel`, `TFGPT2LMHeadModel` cut last logit token and return it
+        # (Same difference holds for other PyTorch v.s. TF models)
         batch_size, seq_len = decoder_input_ids.shape
         expected_shape = (batch_size, seq_len - 1, decoder_config.vocab_size)
         self.assertEqual(outputs_encoder_decoder["logits"].shape, expected_shape)
