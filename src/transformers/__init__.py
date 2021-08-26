@@ -1251,7 +1251,7 @@ if is_tf_available():
             "TFAutoModelWithLMHead",
         ]
     )
-    _import_structure["models.bart"].extend(["TFBartForConditionalGeneration", "TFBartModel", "TFBartPretrainedModel"])
+    _import_structure["models.bart"].extend(["TFBartForCausalLM", "TFBartForConditionalGeneration", "TFBartModel", "TFBartPretrainedModel"])
     _import_structure["models.bert"].extend(
         [
             "TF_BERT_PRETRAINED_MODEL_ARCHIVE_LIST",
@@ -2801,7 +2801,7 @@ if TYPE_CHECKING:
             TFAutoModelForTokenClassification,
             TFAutoModelWithLMHead,
         )
-        from .models.bart import TFBartForConditionalGeneration, TFBartModel, TFBartPretrainedModel
+        from .models.bart import TFBartForCausalLM, TFBartForConditionalGeneration, TFBartModel, TFBartPretrainedModel
         from .models.bert import (
             TF_BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
             TFBertEmbeddings,

@@ -15,6 +15,7 @@
 """ TF 2.0 Bart model. """
 
 
+import copy
 import random
 from typing import Dict, Optional, Tuple, Union
 
@@ -31,6 +32,7 @@ from ...file_utils import (
 from ...modeling_tf_outputs import (
     TFBaseModelOutput,
     TFBaseModelOutputWithPastAndCrossAttentions,
+    TFCausalLMOutputWithCrossAttentions,
     TFSeq2SeqLMOutput,
     TFSeq2SeqModelOutput,
 )
@@ -451,6 +453,7 @@ class TFBartPretrainedModel(TFPreTrainedModel):
             "attention_mask": tf.math.not_equal(input_ids, pad_token),
             "input_ids": input_ids,
         }
+        print(dummy_inputs)
         return dummy_inputs
 
     @tf.function(
@@ -1490,6 +1493,248 @@ class TFBartForConditionalGeneration(TFBartPretrainedModel, TFCausalLanguageMode
             "head_mask": head_mask,
             "decoder_head_mask": decoder_head_mask,
             "cross_attn_head_mask": cross_attn_head_mask,
+            "use_cache": use_cache,  # change this to avoid caching (presumably for debugging)
+        }
+
+    def prepare_decoder_input_ids_from_labels(self, labels: tf.Tensor):
+        return shift_tokens_right(labels, self.config.pad_token_id, self.config.decoder_start_token_id)
+
+    @staticmethod
+    def _reorder_cache(past, beam_idx):
+        if len(past) == 1:
+            return past
+
+        past_key_values = past[1]
+
+        reordered_past = ()
+        for layer_past_key_values in past_key_values:
+            reordered_past += (
+                tuple(tf.gather(layer_past_key_value, beam_idx) for layer_past_key_value in layer_past_key_values[:2])
+                + layer_past_key_values[2:],
+            )
+        return (past[0], reordered_past)
+
+
+class TFBartDecoderWrapper(tf.keras.layers.Layer):
+    """
+    This wrapper class is a helper class to correctly load pretrained checkpoints when the causal language model is
+    used in combination with the :class:`~transformers.TFEncoderDecoderModel` framework.
+    """
+
+    def __init__(self, config: BartConfig, load_weight_prefix=None, **kwargs):
+        super().__init__(**kwargs)
+        self.config = config
+        self.shared = TFSharedEmbeddings(config.vocab_size, config.d_model, config.pad_token_id, name="model.shared")
+
+        # set tf scope correctly
+        if load_weight_prefix is None:
+            load_weight_prefix = "model.shared"
+
+        with tf.compat.v1.variable_scope(load_weight_prefix) as shared_abs_scope_name:
+            pass
+
+        # Wraps layer to avoid problems with weight restoring and ensuring we're in the correct TF scope.
+        embed_tokens = TFWrappedEmbeddings(self.shared, abs_scope_name=shared_abs_scope_name)
+        embed_tokens.vocab_size = self.shared.vocab_size
+        embed_tokens.hidden_size = self.shared.hidden_size
+
+        self.decoder = TFBartDecoder(config, embed_tokens, name="decoder")
+
+    def call(self, *args, **kwargs):
+
+        return self.decoder(*args, **kwargs)
+
+
+class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
+    _keys_to_ignore_on_load_unexpected = [
+        r"model.encoder.embed_tokens.weight",
+        r"model.decoder.embed_tokens.weight",
+    ]
+
+    _requires_load_weight_prefix = True
+
+    def __init__(self, config, load_weight_prefix=None, *inputs, **kwargs):
+        super().__init__(config, *inputs, **kwargs)
+        config = copy.deepcopy(config)
+        config.is_decoder = True
+        config.is_encoder_decoder = False
+        self.model = TFBartDecoderWrapper(config, load_weight_prefix=load_weight_prefix, name="model")
+        self.use_cache = config.use_cache
+
+    def get_decoder(self):
+        return self.model.decoder
+
+    def get_output_embeddings(self):
+        return self.get_input_embeddings()
+
+    def set_output_embeddings(self, value):
+        self.set_input_embeddings(value)
+
+    @add_start_docstrings_to_model_forward(BART_INPUTS_DOCSTRING)
+    @replace_return_docstrings(output_type=TFCausalLMOutputWithCrossAttentions, config_class=_CONFIG_FOR_DOC)
+    @add_end_docstrings(BART_GENERATION_EXAMPLE)
+    def call(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        head_mask=None,
+        cross_attn_head_mask=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        past_key_values=None,
+        inputs_embeds=None,
+        use_cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+        labels=None,
+        training=False,
+        **kwargs,
+    ):
+        r"""
+        labels (:obj:`tf.Tensor` of shape :obj:`(batch_size, sequence_length)`, `optional`):
+            Labels for computing the masked language modeling loss. Indices should either be in ``[0, ...,
+            config.vocab_size]`` or -100 (see ``input_ids`` docstring). Tokens with indices set to ``-100`` are ignored
+            (masked), the loss is only computed for the tokens with labels in ``[0, ..., config.vocab_size]``.
+
+        Returns:
+
+        """
+
+        print('hihi')
+        print(**kwargs)
+
+        inputs = input_processing(
+            func=self.call,
+            config=self.config,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            cross_attn_head_mask=cross_attn_head_mask,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+            labels=labels,
+            training=training,
+            kwargs_call=kwargs,
+        )
+
+        if inputs["labels"] is not None:
+            inputs["labels"] = tf.where(
+                inputs["labels"] == self.config.pad_token_id,
+                tf.fill(shape_list(inputs["labels"]), -100),
+                inputs["labels"],
+            )
+            inputs["use_cache"] = False
+            if inputs["decoder_input_ids"] is None:
+                inputs["decoder_input_ids"] = shift_tokens_right(
+                    inputs["labels"], self.config.pad_token_id, self.config.decoder_start_token_id
+                )
+
+        # batch_size, seq_len = inputs["input_ids"].shape
+        # shape = (batch_size, seq_len) + (self.config.hidden_size,)
+        # h = tf.random.uniform(shape=shape)
+        # inputs["encoder_hidden_states"] = h
+
+        outputs = self.model(
+            inputs["input_ids"],
+            inputs_embeds=inputs["inputs_embeds"],
+            attention_mask=inputs["attention_mask"],
+            encoder_hidden_states=inputs["encoder_hidden_states"],
+            encoder_attention_mask=inputs["encoder_attention_mask"],
+            head_mask=inputs["head_mask"],
+            cross_attn_head_mask=inputs["cross_attn_head_mask"],
+            past_key_values=inputs["past_key_values"],
+            use_cache=inputs["use_cache"],
+            output_attentions=inputs["output_attentions"],
+            output_hidden_states=inputs["output_hidden_states"],
+            return_dict=inputs["return_dict"],
+            training=inputs["training"],
+        )
+        lm_logits = self.model.shared(outputs[0], mode="linear")
+        loss = None
+
+        if inputs["labels"] is not None:
+            # No shift in PyTorch?
+            # # shift labels to the left and cut last logit token
+            # lm_logits = lm_logits[:, :-1]
+            # labels = inputs["labels"][:, 1:]
+            loss = self.compute_loss(labels=labels, logits=lm_logits)
+
+        if not inputs["return_dict"]:
+            output = (lm_logits,) + outputs[1:]
+            return ((loss,) + output) if loss is not None else output
+
+        return TFCausalLMOutputWithCrossAttentions(
+            loss=loss,
+            logits=lm_logits,
+            past_key_values=outputs.past_key_values,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions,
+            cross_attentions=outputs.cross_attentions,
+        )
+
+    def serving_output(self, output: TFCausalLMOutputWithCrossAttentions) -> TFCausalLMOutputWithCrossAttentions:
+        pkv = tf.convert_to_tensor(output.past_key_values) if self.config.use_cache else None
+        hs = tf.convert_to_tensor(output.hidden_states) if self.config.output_hidden_states else None
+        attns = tf.convert_to_tensor(output.attentions) if self.config.output_attentions else None
+        cross_attns = (
+            tf.convert_to_tensor(output.cross_attentions)
+            if self.config.output_attentions
+            and self.config.add_cross_attention
+            and output.cross_attentions is not None
+            else None
+        )
+
+        return TFCausalLMOutputWithCrossAttentions(
+            logits=output.logits, past_key_values=pkv, hidden_states=hs, attentions=attns, cross_attentions=cross_attns
+        )
+
+    def prepare_inputs_for_generation(
+        self,
+        input_ids,
+        past,
+        attention_mask,
+        head_mask=None,
+        use_cache=None,
+        **kwargs,
+    ) -> Dict:
+        assert past is not None and len(past) in {1, 2}, f"past has to be an iterable of length 1,2 got {past}"
+        if len(past) == 1:
+            assert isinstance(past[0], tf.Tensor), f"`past[0]` has to be of type `tf.Tensor`, but is {type(past[0])}"
+            encoder_outputs = TFBaseModelOutput(last_hidden_state=past[0])
+            past_key_values = None
+        else:
+            assert (
+                len(past) == 2
+            ), "`past` has to be of length 2 with the encoder_outputs at the first position and past_key_values at the second position."
+            encoder_outputs, past_key_values = past
+            if isinstance(encoder_outputs, tuple):
+                assert isinstance(
+                    encoder_outputs[0], tf.Tensor
+                ), f"`encoder_outputs[0]` has to be of type `tf.Tensor`, but is {type(encoder_outputs[0])}"
+                encoder_outputs = TFBaseModelOutput(last_hidden_state=encoder_outputs[0])
+            elif isinstance(encoder_outputs, tf.Tensor):
+                encoder_outputs = TFBaseModelOutput(last_hidden_state=encoder_outputs)
+            assert (
+                past_key_values
+            ), f"decoder cached states must be truthy. got {past_key_values} from the 2nd element of past"
+            input_ids = input_ids[:, -1:]
+
+        assert isinstance(
+            encoder_outputs, TFBaseModelOutput
+        ), f"encoder_outputs should be a TFBaseModelOutput, Instead got {type(encoder_outputs)}."
+        return {
+            "input_ids": input_ids,
+            "encoder_outputs": encoder_outputs,
+            "past_key_values": past_key_values,
+            "attention_mask": attention_mask,
+            "head_mask": head_mask,
             "use_cache": use_cache,  # change this to avoid caching (presumably for debugging)
         }
 

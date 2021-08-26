@@ -291,6 +291,15 @@ class TFAutoModelWithLMHead:
         requires_backends(cls, ["tf"])
 
 
+class TFBartForCausalLM:
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["tf"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["tf"])
+
+
 class TFBartForConditionalGeneration:
     def __init__(self, *args, **kwargs):
         requires_backends(self, ["tf"])
