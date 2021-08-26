@@ -453,7 +453,7 @@ class TFBartPretrainedModel(TFPreTrainedModel):
             "attention_mask": tf.math.not_equal(input_ids, pad_token),
             "input_ids": input_ids,
         }
-        print(dummy_inputs)
+
         return dummy_inputs
 
     @tf.function(
@@ -1544,6 +1544,19 @@ class TFBartDecoderWrapper(tf.keras.layers.Layer):
 
         return self.decoder(*args, **kwargs)
 
+    def get_input_embeddings(self):
+        return self.shared
+
+    def set_input_embeddings(self, new_embeddings):
+        self.shared.weight = new_embeddings
+        self.shared.vocab_size = self.shared.weight.shape[0]
+        # retrieve correct absolute scope for embed token wrapper
+        with tf.compat.v1.variable_scope("model.shared") as shared_abs_scope_name:
+            pass
+        # Wraps layer to avoid problems with weight restoring and ensuring we're in the correct TF scope.
+        embed_tokens = TFWrappedEmbeddings(self.shared, abs_scope_name=shared_abs_scope_name)
+        self.decoder.set_embed_tokens(embed_tokens)
+
 
 class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
     _keys_to_ignore_on_load_unexpected = [
@@ -1569,6 +1582,22 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
 
     def set_output_embeddings(self, value):
         self.set_input_embeddings(value)
+
+    @property
+    def dummy_inputs(self):
+        pad_token = 1
+        input_ids = tf.cast(tf.convert_to_tensor(DUMMY_INPUTS), tf.int32)
+        dummy_inputs = {
+            "input_ids": input_ids,
+            "attention_mask": tf.math.not_equal(input_ids, pad_token),
+        }
+        # Add `encoder_hidden_states` to make the cross-attention layers' weights initialized
+        batch_size, seq_len = tf.constant(DUMMY_INPUTS).shape
+        shape = (batch_size, seq_len) + (self.config.hidden_size,)
+        h = tf.random.uniform(shape=shape)
+        dummy_inputs["encoder_hidden_states"] = h
+
+        return dummy_inputs
 
     @add_start_docstrings_to_model_forward(BART_INPUTS_DOCSTRING)
     @replace_return_docstrings(output_type=TFCausalLMOutputWithCrossAttentions, config_class=_CONFIG_FOR_DOC)
@@ -1627,8 +1656,8 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
                 inputs["labels"],
             )
             inputs["use_cache"] = False
-            if inputs["decoder_input_ids"] is None:
-                inputs["decoder_input_ids"] = shift_tokens_right(
+            if inputs["input_ids"] is None:
+                inputs["input_ids"] = shift_tokens_right(
                     inputs["labels"], self.config.pad_token_id, self.config.decoder_start_token_id
                 )
 
