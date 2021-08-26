@@ -677,13 +677,9 @@ class TFBartEncoderDecoderModelTest(TFEncoderDecoderMixin, unittest.TestCase):
             decoder_config,
             decoder_input_ids,
             decoder_attention_mask,
-            decoder_head_mask,
-            decoder_token_type_ids,
-            decoder_sequence_labels,
-            decoder_token_labels,
-            decoder_choice_labels,
             encoder_hidden_states,
             encoder_attention_mask,
+            lm_labels,
         ) = decoder_config_and_inputs
 
         # make sure that cross attention layers are added
@@ -696,13 +692,9 @@ class TFBartEncoderDecoderModelTest(TFEncoderDecoderMixin, unittest.TestCase):
             "attention_mask": attention_mask,
             "decoder_config": decoder_config,
             "decoder_input_ids": decoder_input_ids,
-            "decoder_token_type_ids": decoder_token_type_ids,
             "decoder_attention_mask": decoder_attention_mask,
-            "decoder_sequence_labels": decoder_sequence_labels,
-            "decoder_token_labels": decoder_token_labels,
-            "decoder_choice_labels": decoder_choice_labels,
             "encoder_hidden_states": encoder_hidden_states,
-            "labels": decoder_token_labels,
+            "labels": lm_labels,
         }
 
 
