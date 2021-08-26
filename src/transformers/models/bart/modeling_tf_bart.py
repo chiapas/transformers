@@ -453,7 +453,6 @@ class TFBartPretrainedModel(TFPreTrainedModel):
             "attention_mask": tf.math.not_equal(input_ids, pad_token),
             "input_ids": input_ids,
         }
-
         return dummy_inputs
 
     @tf.function(
