@@ -1685,13 +1685,19 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
             loss = self.compute_loss(labels=labels, logits=lm_logits)
 
         if not inputs["return_dict"]:
+            past = outputs[1]
+            if past is not None:
+                past = past[1]
+            outputs = (outputs[0], past) + outputs[2:]
+            outputs = tuple([x for x in outputs if x is not None])
+
             output = (lm_logits,) + outputs[1:]
             return ((loss,) + output) if loss is not None else output
 
         return TFCausalLMOutputWithCrossAttentions(
             loss=loss,
             logits=lm_logits,
-            past_key_values=outputs.past_key_values,
+            past_key_values=outputs.past_key_values[1] if outputs.past_key_values is not None else None,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
             cross_attentions=outputs.cross_attentions,
@@ -1713,47 +1719,16 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
             logits=output.logits, past_key_values=pkv, hidden_states=hs, attentions=attns, cross_attentions=cross_attns
         )
 
-    def prepare_inputs_for_generation(
-        self,
-        input_ids,
-        past,
-        attention_mask,
-        head_mask=None,
-        use_cache=None,
-        **kwargs,
-    ) -> Dict:
-        assert past is not None and len(past) in {1, 2}, f"past has to be an iterable of length 1,2 got {past}"
-        if len(past) == 1:
-            assert isinstance(past[0], tf.Tensor), f"`past[0]` has to be of type `tf.Tensor`, but is {type(past[0])}"
-            encoder_outputs = TFBaseModelOutput(last_hidden_state=past[0])
-            past_key_values = None
-        else:
-            assert (
-                len(past) == 2
-            ), "`past` has to be of length 2 with the encoder_outputs at the first position and past_key_values at the second position."
-            encoder_outputs, past_key_values = past
-            if isinstance(encoder_outputs, tuple):
-                assert isinstance(
-                    encoder_outputs[0], tf.Tensor
-                ), f"`encoder_outputs[0]` has to be of type `tf.Tensor`, but is {type(encoder_outputs[0])}"
-                encoder_outputs = TFBaseModelOutput(last_hidden_state=encoder_outputs[0])
-            elif isinstance(encoder_outputs, tf.Tensor):
-                encoder_outputs = TFBaseModelOutput(last_hidden_state=encoder_outputs)
-            assert (
-                past_key_values
-            ), f"decoder cached states must be truthy. got {past_key_values} from the 2nd element of past"
-            input_ids = input_ids[:, -1:]
+    def prepare_inputs_for_generation(self, inputs, past=None, attention_mask=None, **model_kwargs):
+        # cut decoder_input_ids if past is used
+        if past:
+            inputs = tf.expand_dims(inputs[:, -1], -1)
 
-        assert isinstance(
-            encoder_outputs, TFBaseModelOutput
-        ), f"encoder_outputs should be a TFBaseModelOutput, Instead got {type(encoder_outputs)}."
         return {
-            "input_ids": input_ids,
-            "encoder_outputs": encoder_outputs,
-            "past_key_values": past_key_values,
+            "input_ids": inputs,
             "attention_mask": attention_mask,
-            "head_mask": head_mask,
-            "use_cache": use_cache,  # change this to avoid caching (presumably for debugging)
+            "past_key_values": past,
+            "use_cache": model_kwargs["use_cache"],
         }
 
     def prepare_decoder_input_ids_from_labels(self, labels: tf.Tensor):
@@ -1761,10 +1736,8 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
 
     @staticmethod
     def _reorder_cache(past, beam_idx):
-        if len(past) == 1:
-            return past
 
-        past_key_values = past[1]
+        past_key_values = past
 
         reordered_past = ()
         for layer_past_key_values in past_key_values:
@@ -1772,4 +1745,4 @@ class TFBartForCausalLM(TFBartPretrainedModel, TFCausalLanguageModelingLoss):
                 tuple(tf.gather(layer_past_key_value, beam_idx) for layer_past_key_value in layer_past_key_values[:2])
                 + layer_past_key_values[2:],
             )
-        return (past[0], reordered_past)
+        return reordered_past
