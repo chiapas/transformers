@@ -373,10 +373,10 @@ class TFBartStandaloneDecoderModelTester:
         decoder_layers=4,
         encoder_attention_heads=4,
         decoder_attention_heads=4,
-        max_position_embeddings=30,
+        max_position_embeddings=20,
         is_encoder_decoder=False,
-        pad_token_id=0,
-        bos_token_id=1,
+        pad_token_id=1,
+        bos_token_id=0,
         eos_token_id=2,
         scope=None,
     ):
