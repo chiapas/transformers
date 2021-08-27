@@ -41,7 +41,12 @@ if is_torch_available():
     ]
 
 if is_tf_available():
-    _import_structure["modeling_tf_bart"] = ["TFBartForCausalLM", "TFBartForConditionalGeneration", "TFBartModel", "TFBartPretrainedModel"]
+    _import_structure["modeling_tf_bart"] = [
+        "TFBartForCausalLM",
+        "TFBartForConditionalGeneration",
+        "TFBartModel",
+        "TFBartPretrainedModel",
+    ]
 
 if is_flax_available():
     _import_structure["modeling_flax_bart"] = [
@@ -72,7 +77,12 @@ if TYPE_CHECKING:
         )
 
     if is_tf_available():
-        from .modeling_tf_bart import TFBartForCausalLM, TFBartForConditionalGeneration, TFBartModel, TFBartPretrainedModel
+        from .modeling_tf_bart import (
+            TFBartForCausalLM,
+            TFBartForConditionalGeneration,
+            TFBartModel,
+            TFBartPretrainedModel,
+        )
 
     if is_flax_available():
         from .modeling_flax_bart import (

@@ -28,7 +28,7 @@ from .test_modeling_tf_common import TFModelTesterMixin, floats_tensor, ids_tens
 if is_tf_available():
     import tensorflow as tf
 
-    from transformers import TFBartForConditionalGeneration, TFBartModel
+    from transformers import TFBartForCausalLM, TFBartForConditionalGeneration, TFBartModel
 
 
 @require_tf
@@ -356,7 +356,6 @@ class TFBartHeadTests(unittest.TestCase):
 
 
 class TFBartStandaloneDecoderModelTester:
-
     def __init__(
         self,
         parent,
@@ -467,103 +466,144 @@ class TFBartStandaloneDecoderModelTester:
             lm_labels,
         )
 
-    # def create_and_check_decoder_model_past(
-    #     self,
-    #     config,
-    #     input_ids,
-    #     attention_mask,
-    #     lm_labels,
-    # ):
-    #     config.use_cache = True
-    #     model = BartDecoder(config=config).to(torch_device).eval()
-    #     # first forward pass
-    #     outputs = model(input_ids, use_cache=True)
-    #     outputs_use_cache_conf = model(input_ids)
-    #     outputs_no_past = model(input_ids, use_cache=False)
-    #
-    #     self.parent.assertTrue(len(outputs) == len(outputs_use_cache_conf))
-    #     self.parent.assertTrue(len(outputs) == len(outputs_no_past) + 1)
-    #
-    #     past_key_values = outputs["past_key_values"]
-    #
-    #     # create hypothetical next token and extent to next_input_ids
-    #     next_tokens = ids_tensor((self.batch_size, 1), config.vocab_size)
-    #
-    #     # append to next input_ids and
-    #     next_input_ids = torch.cat([input_ids, next_tokens], dim=-1)
-    #
-    #     output_from_no_past = model(next_input_ids)["last_hidden_state"]
-    #     output_from_past = model(next_tokens, past_key_values=past_key_values)["last_hidden_state"]
-    #
-    #     # select random slice
-    #     random_slice_idx = ids_tensor((1,), output_from_past.shape[-1]).item()
-    #     output_from_no_past_slice = output_from_no_past[:, next_input_ids.shape[-1] - 1, random_slice_idx].detach()
-    #     output_from_past_slice = output_from_past[:, 0, random_slice_idx].detach()
-    #
-    #     # test that outputs are equal for slice
-    #     assert torch.allclose(output_from_past_slice, output_from_no_past_slice, atol=1e-3)
-    #
-    # def create_and_check_decoder_model_attention_mask_past(
-    #     self,
-    #     config,
-    #     input_ids,
-    #     attention_mask,
-    #     lm_labels,
-    # ):
-    #     model = BartDecoder(config=config).to(torch_device).eval()
-    #
-    #     # create attention mask
-    #     attn_mask = torch.ones(input_ids.shape, dtype=torch.long, device=torch_device)
-    #
-    #     half_seq_length = input_ids.shape[-1] // 2
-    #     attn_mask[:, half_seq_length:] = 0
-    #
-    #     # first forward pass
-    #     past_key_values = model(input_ids, attention_mask=attn_mask, use_cache=True)["past_key_values"]
-    #
-    #     # create hypothetical next token and extent to next_input_ids
-    #     next_tokens = ids_tensor((self.batch_size, 1), config.vocab_size)
-    #
-    #     # change a random masked slice from input_ids
-    #     random_seq_idx_to_change = ids_tensor((1,), half_seq_length).item() + 1
-    #     random_other_next_tokens = ids_tensor((self.batch_size, 1), config.vocab_size).squeeze(-1)
-    #     input_ids[:, -random_seq_idx_to_change] = random_other_next_tokens
-    #
-    #     # append to next input_ids and attn_mask
-    #     next_input_ids = torch.cat([input_ids, next_tokens], dim=-1)
-    #     attn_mask = torch.cat(
-    #         [attn_mask, torch.ones((attn_mask.shape[0], 1), dtype=torch.long, device=torch_device)],
-    #         dim=1,
-    #     )
-    #
-    #     # get two different outputs
-    #     output_from_no_past = model(next_input_ids, attention_mask=attn_mask)["last_hidden_state"]
-    #     output_from_past = model(next_tokens, attention_mask=attn_mask, past_key_values=past_key_values)[
-    #         "last_hidden_state"
-    #     ]
-    #
-    #     # select random slice
-    #     random_slice_idx = ids_tensor((1,), output_from_past.shape[-1]).item()
-    #     output_from_no_past_slice = output_from_no_past[:, next_input_ids.shape[-1] - 1, random_slice_idx].detach()
-    #     output_from_past_slice = output_from_past[:, 0, random_slice_idx].detach()
-    #
-    #     # test that outputs are equal for slice
-    #     assert torch.allclose(output_from_past_slice, output_from_no_past_slice, atol=1e-3)
-    #
-    # def prepare_config_and_inputs_for_common(self):
-    #     config_and_inputs = self.prepare_config_and_inputs()
-    #     (
-    #         config,
-    #         input_ids,
-    #         attention_mask,
-    #         lm_labels,
-    #     ) = config_and_inputs
-    #
-    #     inputs_dict = {
-    #         "input_ids": input_ids,
-    #         "attention_mask": attention_mask,
-    #     }
-    #     return config, inputs_dict
+    def create_and_check_decoder_model_past(
+        self,
+        config,
+        input_ids,
+        attention_mask,
+        lm_labels,
+    ):
+        config.use_cache = True
+        config.output_hidden_states = True
+
+        model = TFBartForCausalLM(config=config)
+        # first forward pass
+        outputs = model(input_ids, use_cache=True)
+        outputs_use_cache_conf = model(input_ids)
+        outputs_no_past = model(input_ids, use_cache=False)
+
+        self.parent.assertTrue(len(outputs) == len(outputs_use_cache_conf))
+        self.parent.assertTrue(len(outputs) == len(outputs_no_past) + 1)
+
+        past_key_values = outputs["past_key_values"][1]
+
+        # create hypothetical next token and extent to next_input_ids
+        next_tokens = ids_tensor((self.batch_size, 1), config.vocab_size)
+
+        # append to next input_ids and
+        next_input_ids = tf.concat([input_ids, next_tokens], axis=-1)
+
+        output_from_no_past = model(next_input_ids).hidden_states[-1]
+        output_from_past = model(next_tokens, past_key_values=past_key_values).hidden_states[-1]
+
+        # select random slice
+        random_slice_idx = ids_tensor((1,), output_from_past.shape[-1])[0]
+        output_from_no_past_slice = output_from_no_past[:, next_input_ids.shape[-1] - 1, random_slice_idx]
+        output_from_past_slice = output_from_past[:, 0, random_slice_idx]
+
+        # test that outputs are equal for slice
+        assert tf.experimental.numpy.allclose(output_from_past_slice, output_from_no_past_slice, atol=1e-03)
+
+    def create_and_check_decoder_model_attention_mask_past(
+        self,
+        config,
+        input_ids,
+        attention_mask,
+        lm_labels,
+    ):
+        config.output_hidden_states = True
+        model = TFBartForCausalLM(config=config)
+
+        # create attention mask
+        attn_mask = tf.ones(input_ids.shape, dtype=tf.int32)
+        batch_size, seq_len = input_ids.shape
+
+        half_seq_length = input_ids.shape[-1] // 2
+        attn_mask = tf.concat(
+            [attn_mask[:, :half_seq_length], tf.zeros(shape=(batch_size, seq_len - half_seq_length), dtype=tf.int32)],
+            axis=-1,
+        )
+
+        # first forward pass
+        past_key_values = model(input_ids, attention_mask=attn_mask, use_cache=True)["past_key_values"][1]
+
+        # create hypothetical next token and extent to next_input_ids
+        next_tokens = ids_tensor((self.batch_size, 1), config.vocab_size)
+
+        # change a random masked slice from input_ids
+        random_seq_idx_to_change = ids_tensor((1,), half_seq_length)[0] + 1
+        random_other_next_tokens = ids_tensor((self.batch_size, 1), config.vocab_size)
+        input_ids = tf.concat(
+            [
+                input_ids[:, :-random_seq_idx_to_change],
+                random_other_next_tokens,
+                input_ids[:, seq_len - random_seq_idx_to_change + 1 :],
+            ],
+            axis=-1,
+        )
+
+        # append to next input_ids and attn_mask
+        next_input_ids = tf.concat([input_ids, next_tokens], axis=-1)
+        attn_mask = tf.concat(
+            [attn_mask, tf.ones((attn_mask.shape[0], 1), dtype=tf.int32)],
+            axis=1,
+        )
+
+        # get two different outputs
+        output_from_no_past = model(next_input_ids, attention_mask=attn_mask)["hidden_states"][-1]
+        output_from_past = model(next_tokens, attention_mask=attn_mask, past_key_values=past_key_values)[
+            "hidden_states"
+        ][-1]
+
+        # select random slice
+        random_slice_idx = ids_tensor((1,), output_from_past.shape[-1])[0]
+        output_from_no_past_slice = output_from_no_past[:, next_input_ids.shape[-1] - 1, random_slice_idx]
+        output_from_past_slice = output_from_past[:, 0, random_slice_idx]
+
+        # test that outputs are equal for slice
+        assert tf.experimental.numpy.allclose(output_from_past_slice, output_from_no_past_slice, atol=1e-03)
+
+    def prepare_config_and_inputs_for_common(self):
+        config_and_inputs = self.prepare_config_and_inputs()
+        (
+            config,
+            input_ids,
+            attention_mask,
+            lm_labels,
+        ) = config_and_inputs
+
+        inputs_dict = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        return config, inputs_dict
+
+
+@require_tf
+class TFBartStandaloneDecoderModelTest(TFModelTesterMixin, unittest.TestCase):
+    all_model_classes = (TFBartForCausalLM,) if is_tf_available() else ()
+    all_generative_model_classes = (TFBartForCausalLM,) if is_tf_available() else ()
+    test_pruning = False
+    is_encoder_decoder = False
+    test_onnx = True
+    onnx_min_opset = 10
+
+    def setUp(
+        self,
+    ):
+        self.model_tester = TFBartStandaloneDecoderModelTester(self, is_training=False)
+        self.config_tester = ConfigTester(self, config_class=BartConfig)
+
+    def test_config(self):
+        self.config_tester.run_common_tests()
+
+    def test_decoder_model_past(self):
+        config_and_inputs = self.model_tester.prepare_config_and_inputs()
+        self.model_tester.create_and_check_decoder_model_past(*config_and_inputs)
+
+    def test_decoder_model_attn_mask_past(self):
+        config_and_inputs = self.model_tester.prepare_config_and_inputs()
+        self.model_tester.create_and_check_decoder_model_attention_mask_past(*config_and_inputs)
 
 
 @slow
