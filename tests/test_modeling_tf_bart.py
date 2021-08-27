@@ -485,7 +485,7 @@ class TFBartStandaloneDecoderModelTester:
         self.parent.assertTrue(len(outputs) == len(outputs_use_cache_conf))
         self.parent.assertTrue(len(outputs) == len(outputs_no_past) + 1)
 
-        past_key_values = outputs["past_key_values"][1]
+        past_key_values = outputs["past_key_values"]
 
         # create hypothetical next token and extent to next_input_ids
         next_tokens = ids_tensor((self.batch_size, 1), config.vocab_size)
@@ -525,7 +525,7 @@ class TFBartStandaloneDecoderModelTester:
         )
 
         # first forward pass
-        past_key_values = model(input_ids, attention_mask=attn_mask, use_cache=True)["past_key_values"][1]
+        past_key_values = model(input_ids, attention_mask=attn_mask, use_cache=True)["past_key_values"]
 
         # create hypothetical next token and extent to next_input_ids
         next_tokens = ids_tensor((self.batch_size, 1), config.vocab_size)
