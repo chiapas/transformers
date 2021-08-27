@@ -403,7 +403,14 @@ class TFEncoderDecoderMixin:
 
         with tempfile.TemporaryDirectory() as tmp_dirname:
             model_2.save_pretrained(tmp_dirname)
-            model_1 = TFEncoderDecoderModel.from_pretrained(tmp_dirname)
+
+            kwargs = {}
+            if model_2.encoder._requires_load_weight_prefix:
+                kwargs["encoder_load_weight_prefix"] = TFEncoderDecoderModel.load_weight_prefix + "./encoder"
+            if model_2.decoder._requires_load_weight_prefix:
+                kwargs["decoder_load_weight_prefix"] = TFEncoderDecoderModel.load_weight_prefix + "./decoder"
+
+            model_1 = TFEncoderDecoderModel.from_pretrained(tmp_dirname, **kwargs)
 
             after_outputs = model_1(
                 input_ids=input_ids,

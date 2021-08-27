@@ -163,6 +163,8 @@ class TFEncoderDecoderModel(TFPreTrainedModel):
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[TFPreTrainedModel] = None,
         decoder: Optional[TFPreTrainedModel] = None,
+        encoder_load_weight_prefix: Optional[str] = None,
+        decoder_load_weight_prefix: Optional[str] = None,
     ):
         assert config is not None or (
             encoder is not None and decoder is not None
@@ -177,12 +179,18 @@ class TFEncoderDecoderModel(TFPreTrainedModel):
         if encoder is None:
             from ..auto.modeling_tf_auto import TFAutoModel
 
-            encoder = TFAutoModel.from_config(config.encoder, name="encoder")
+            kwargs = (
+                {"load_weight_prefix": encoder_load_weight_prefix} if encoder_load_weight_prefix is not None else {}
+            )
+            encoder = TFAutoModel.from_config(config.encoder, name="encoder", **kwargs)
 
         if decoder is None:
             from ..auto.modeling_tf_auto import TFAutoModelForCausalLM
 
-            decoder = TFAutoModelForCausalLM.from_config(config.decoder, name="decoder")
+            kwargs = (
+                {"load_weight_prefix": decoder_load_weight_prefix} if decoder_load_weight_prefix is not None else {}
+            )
+            decoder = TFAutoModelForCausalLM.from_config(config.decoder, name="decoder", **kwargs)
 
         # Make sure these 2 `tf.keras.Model` have fixed names so `from_pretrained` could load model weights correctly.
         assert encoder.name == "encoder"
