@@ -2,6 +2,7 @@ steps:
 - group: ":lock_with_ink_pen: Security Audits"
   key: "group"
   steps:
+#    - trigger: "ydshieh-transformers-2"
     - label: "Generate"
   #    plugins:
   #      - docker#v5.12.0:
@@ -70,3 +71,10 @@ steps:
 #  #      - "echo 6"
 #  #      - "echo 7"
 #      key: build-3
+- group: ":lock_with_ink_pen: Good boy!"
+  key: "group-2"
+  steps:
+    - label: "Build 1"
+      commands:
+        - "echo 3"
+        - "echo 2"
